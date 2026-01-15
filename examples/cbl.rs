@@ -10,6 +10,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::fs::File;
 use std::io::{stdout, BufReader, BufWriter, Write};
 use std::path::Path;
+use std::path::PathBuf;
 
 // Loads runtime-provided constants for which declarations
 // will be generated at `$OUT_DIR/constants.rs`.
@@ -28,7 +29,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Build an index containing the k-mers of a FASTA/Q file
+    /// Build a separate k-mer index for each input FASTA/Q file.
     Build(BuildArgs),
     /// Count the k-mers contained in an index
     Count(IndexArgs),
@@ -54,9 +55,12 @@ enum Command {
 
 #[derive(Args, Debug)]
 struct BuildArgs {
-    /// Input file (FASTA/Q, possibly gzipped)
-    input: String,
-    /// Output file (no serialization by default)
+    /// List of input files (FASTA/Q, possibly gzipped) or single input file. [e.g cbl build file1.fasta file2.fasta ...]
+    input: Vec<String>,
+    /// Output directory (defaults to current directory)
+    #[arg(long, default_value = ".")]
+    output_dir: String,
+    /// Output file name (will be used for a single input only)
     #[arg(short, long)]
     output: Option<String>,
     /// Use canonical k-mers
@@ -109,8 +113,8 @@ struct SetOpsArgs {
     output: Option<String>,
 }
 
-fn read_fasta<P: AsRef<Path> + Copy>(path: P) -> Box<dyn FastxReader> {
-    parse_fastx_file(path)
+fn read_fasta<P: AsRef<Path>>(path: P) -> Box<dyn FastxReader> {
+    parse_fastx_file(&path)
         .unwrap_or_else(|_| panic!("Failed to open {}", path.as_ref().to_str().unwrap()))
 }
 
@@ -145,26 +149,60 @@ fn main() {
     let args = Cli::parse();
     match args.command {
         Command::Build(args) => {
-            let input_filename = args.input.as_str();
-            let mut cbl = if args.canonical {
-                CBL::<K, T, PREFIX_BITS>::new_canonical()
-            } else {
-                CBL::<K, T, PREFIX_BITS>::new()
-            };
-            let mut reader = read_fasta(input_filename);
-            if cbl.is_canonical() {
-                eprintln!("Building the index of canonical {K}-mers contained in {input_filename}");
-            } else {
-                eprintln!("Building the index of {K}-mers contained in {input_filename}");
+
+            if args.input.len() > 1 && args.output.is_some() {
+                eprintln!(
+                    "Warning: --output is ignored when multiple input files are provided. \
+                    Output files will be named <input>_index."
+                );
             }
-            while let Some(record) = reader.next() {
-                let seqrec = record.unwrap_or_else(|_| panic!("Invalid record"));
-                cbl.insert_seq(&seqrec.seq());
-            }
-            if let Some(output_filename) = args.output {
-                write_index(&cbl, output_filename.as_str());
+
+            for input_filename in &args.input{
+
+                let mut cbl = if args.canonical {
+                    CBL::<K, T, PREFIX_BITS>::new_canonical()
+                } else {
+                    CBL::<K, T, PREFIX_BITS>::new()
+                };
+                let mut reader = read_fasta(input_filename);
+                eprintln!(
+                    "Building the index of {}{K}-mers contained in {}",
+                    if cbl.is_canonical() { "canonical " } else { "" },
+                    input_filename
+                );
+
+                while let Some(record) = reader.next() {
+                    let seqrec = record.unwrap_or_else(|_| panic!("Invalid record"));
+                    cbl.insert_seq(&seqrec.seq());
+                }
+
+                let output_filename = if args.input.len() == 1 {
+                    if let Some(ref out) = args.output {
+                        out.clone()
+                    } else {
+                        let base_name = Path::new(input_filename)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or_else(|| {
+                                panic!("Input basename of '{}' is not valid", input_filename)
+                            });
+                        format!("{base_name}_index")
+                    }
+                } else {
+                    let base_name = Path::new(input_filename)
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or_else(|| {
+                            panic!("Input basename of '{}' is not valid", input_filename)
+                        });
+                    format!("{base_name}_index")
+                };
+                
+                let output_path = PathBuf::from(&args.output_dir).join(output_filename);
+                write_index(&cbl, output_path.as_path());
             }
         }
+
         Command::Count(args) => {
             let index_filename = args.index.as_str();
             let cbl: CBL<K, T, PREFIX_BITS> = read_index(index_filename);
