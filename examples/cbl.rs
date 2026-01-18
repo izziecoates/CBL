@@ -138,7 +138,7 @@ fn read_index<D: DeserializeOwned, P: AsRef<Path> + Copy>(path: P) -> D {
         .unwrap()
 }
 
-fn write_multi_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) {
+fn write_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) {
     let output = File::create(path)
         .unwrap_or_else(|_| panic!("Failed to open {}", path.as_ref().to_str().unwrap()));
     let mut writer = BufWriter::new(output);
@@ -151,7 +151,7 @@ fn write_multi_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) {
 }
 
 
-fn write_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) -> Result <0,  Box<dyn std::error::Error>> {
+fn write_multi_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) -> Result <0,  Box<dyn std::error::Error>> {
     let output = File::create(path)?;
     let mut writer = BufWriter::new(output);
     eprintln!("Writing the index to {}", path.as_ref().to_str().unwrap());
