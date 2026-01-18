@@ -222,7 +222,7 @@ fn main() {
                         );
                         format!("unknown_{}", index)
                         }
-                    });
+                    );
 
                 let output_filename = if args.input.len() == 1 {
                     args.output.clone().unwrap_or_else(|| format!("{base_name}_index"))
