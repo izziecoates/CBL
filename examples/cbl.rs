@@ -172,10 +172,11 @@ fn main() {
                 // Try to open the FASTA file
                 let mut reader = match read_multi_fasta(input_filename) {
                     Ok(read) => read, // success read_mutli_fasta returns Box<dyn FastxReader>
-                    Err(err) => 
+                    Err(err) => {
                         eprintln!("Failed to open {}: due to {}", input_filename, err);
                         continue; // skip this file, move to the next
                     }
+                };
 
                 read_multi_fasta(input_filename)
                     .expect("Failed to read line");
