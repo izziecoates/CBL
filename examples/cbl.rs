@@ -211,7 +211,7 @@ fn main() {
                 }
 
                 // Build output filename
-                let base_name = Path::new(input_filename)
+                let base_name = String = Path::new(input_filename)
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or_else(|| {
@@ -220,7 +220,8 @@ fn main() {
                             "Warning: could not determine a valid base name for '{}', using 'input_{}' instead.",
                             input_filename, index
                         );
-                        format!("unknown_{}", index)
+                        fall_back_name = format!("unknown_{}", index)
+                        fall_back_name
                         }
                     );
 
