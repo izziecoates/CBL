@@ -138,7 +138,7 @@ fn read_index<D: DeserializeOwned, P: AsRef<Path> + Copy>(path: P) -> D {
         .unwrap()
 }
 
-fn write_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) {
+fn write_multi_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) {
     let output = File::create(path)
         .unwrap_or_else(|_| panic!("Failed to open {}", path.as_ref().to_str().unwrap()));
     let mut writer = BufWriter::new(output);
@@ -148,6 +148,18 @@ fn write_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) {
         .reject_trailing_bytes()
         .serialize_into(&mut writer, &index)
         .unwrap();
+}
+
+
+fn write_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) -> Result <0,  Box<dyn std::error::Error>> {
+    let output = File::create(path)?;
+    let mut writer = BufWriter::new(output);
+    eprintln!("Writing the index to {}", path.as_ref().to_str().unwrap());
+    DefaultOptions::new()
+        .with_varint_encoding()
+        .reject_trailing_bytes()
+        .serialize_into(&mut writer, &index)?;
+    Ok(())
 }
 
 fn main() {
@@ -161,6 +173,8 @@ fn main() {
                     Output files will be named <input>_index."
                 );
             }
+            let mut index = 0; // incremental index for output files with invalid basenames
+
             for input_filename in &args.input {
                 // Create a new CBL index
                 let mut cbl = if args.canonical {
@@ -201,8 +215,13 @@ fn main() {
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or_else(|| {
-                        eprintln!("Could not determine basename for '{}', skipping file", input_filename);
-                        return continue; // skip file if basename invalid
+                        index += 1;
+                        eprintln!(
+                            "Warning: could not determine a valid base name for '{}', using 'input_{}' instead.",
+                            input_filename, index
+                        );
+                        format!("unknown_{}", index)
+                        }
                     });
 
                 let output_filename = if args.input.len() == 1 {
@@ -218,6 +237,7 @@ fn main() {
                     eprintln!("Failed to write index for '{}': {}", input_filename, err);
                     // optionally continue, since other files may succeed
                 }
+
             }
 
         }
