@@ -223,7 +223,7 @@ fn main() {
                             input_filename, index
                         );
                         fall_back_name
-                        })
+                        });
                     
 
                 let output_filename = if args.input.len() == 1 {
