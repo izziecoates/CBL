@@ -211,7 +211,7 @@ fn main() {
                 }
 
                 // Build output filename
-                let base_name = String = Path::new(input_filename)
+                let base_name: String = Path::new(input_filename)
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or_else(|| {
