@@ -176,7 +176,6 @@ fn main() {
                         eprintln!("Failed to open {}: due to {}", input_filename, err);
                         continue; // skip this file, move to the next
                     }
-                };
 
                 read_multi_fasta(input_filename)
                     .expect("Failed to read line");
