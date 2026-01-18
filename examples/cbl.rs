@@ -214,9 +214,10 @@ fn main() {
                 let base_name: String = Path::new(input_filename)
                     .file_stem()
                     .and_then(|s| s.to_str())
+                    .map(|s| s.to_string())
                     .unwrap_or_else(|| {
                         index += 1;
-                        let fall_back_name = format!("unknown_{}", index));
+                        let fall_back_name = format!("unknown_{}", index);
                         eprintln!(
                             "Warning: could not determine a valid base name for '{}', using 'input_{}' instead.",
                             input_filename, index
