@@ -119,9 +119,8 @@ fn read_fasta<P: AsRef<Path>>(path: P) -> Box<dyn FastxReader> {
 }
 
 // Add a new reading fasta function that returns a Result of sucessful or failed operation 
-fn read_multi_fasta<P: AsRef<Path>>(path: P) -> Result<Box<dyn FastxReader>, String> {
+fn read_multi_fasta<P: AsRef<Path>>(path: P) -> Result<Box<dyn FastxReader>, parse_fastx::Error> {
     parse_fastx_file(&path)
-        .map_err(|e| format!("Failed to open {}: {}", path.as_ref().display(), e))
 }
 
 fn read_index<D: DeserializeOwned, P: AsRef<Path> + Copy>(path: P) -> D {
@@ -172,11 +171,22 @@ fn main() {
 
                 // Try to open the FASTA file
                 let mut reader = match read_multi_fasta(input_filename) {
-                    Ok(r) => r, // success
-                    Err(err) => {
+                    Ok(read) => read, // success read_mutli_fasta returns Box<dyn FastxReader>
+                    Err(err) => 
+                        eprintln!("Failed to open {}: due to {}", input_filename, err);
                         continue; // skip this file, move to the next
                     }
                 };
+
+                read_multi_fasta(input_filename)
+                    .expect("Failed to read line");
+
+                let guess: u32 = match guess.trim().parse() {
+                    Ok(num) => num,
+                    Err(_) => continue,
+                };
+
+
 
                 eprintln!(
                     "Building the index of {}{K}-mers contained in {}",
