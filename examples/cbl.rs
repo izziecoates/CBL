@@ -150,18 +150,6 @@ fn write_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) {
         .unwrap();
 }
 
-
-fn write_multi_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) -> Result <0,  Box<dyn std::error::Error>> {
-    let output = File::create(path)?;
-    let mut writer = BufWriter::new(output);
-    eprintln!("Writing the index to {}", path.as_ref().to_str().unwrap());
-    DefaultOptions::new()
-        .with_varint_encoding()
-        .reject_trailing_bytes()
-        .serialize_into(&mut writer, &index)?;
-    Ok(())
-}
-
 fn main() {
     let args = Cli::parse();
     match args.command {
@@ -233,12 +221,7 @@ fn main() {
                 };
 
                 let output_path = PathBuf::from(&args.output_dir).join(output_filename);
-
-                // Write the index
-                if let Err(err) = write_index(&cbl, output_path.as_path()) {
-                    eprintln!("Failed to write index for '{}': {}", input_filename, err);
-                    // optionally continue, since other files may succeed
-                }
+                write_index(&cbl, output_path.as_path());
 
             }
 
