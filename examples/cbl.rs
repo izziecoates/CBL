@@ -11,6 +11,7 @@ use std::fs::File;
 use std::io::{stdout, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::path::PathBuf;
+use anyhow::Result;
 
 // Loads runtime-provided constants for which declarations
 // will be generated at `$OUT_DIR/constants.rs`.
@@ -119,8 +120,8 @@ fn read_fasta<P: AsRef<Path>>(path: P) -> Box<dyn FastxReader> {
 }
 
 // Add a new reading fasta function that returns a Result of sucessful or failed operation 
-fn read_multi_fasta<P: AsRef<Path>>(path: P) -> Result<Box<dyn FastxReader>, parse_fastx::Error> {
-    parse_fastx_file(&path)
+fn read_multi_fasta<P: AsRef<Path>>(path: P) -> Result<Box<dyn FastxReader>> {
+    Ok(parse_fastx_file(&path)?)
 }
 
 fn read_index<D: DeserializeOwned, P: AsRef<Path> + Copy>(path: P) -> D {
@@ -149,6 +150,30 @@ fn write_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) {
         .serialize_into(&mut writer, &index)
         .unwrap();
 }
+
+fn most_common_kmers<K: Ord + Copy, T: Ord + Copy, const PREFIX_BITS: usize>(cbl: &CBL<K, T, PREFIX_BITS>, n: usize) -> Vec<(K, T)> {
+        let mut entries: Vec<(K, T)> = cbl
+            .iter() // must yield (&K, &T) or (K, T)
+            .map(|(kmer, count)| (*kmer, *count))
+            .collect();
+
+        // Sort by descending count
+        entries.sort_by(|a, b| b.1.cmp(&a.1));
+        entries.truncate(n);
+        entries
+
+        // Example: hard-coded or CLI-provided value
+        let top_n = 10;
+
+        let common = most_common_kmers(&cbl, top_n);
+
+        eprintln!("Top {top_n} most common k-mers:");
+        for (kmer, count) in common {
+            eprintln!("{kmer}\t{count}");
+        }
+    
+}
+
 
 fn main() {
     let args = Cli::parse();
@@ -234,6 +259,18 @@ fn main() {
                 eprintln!("It contains {} canonical {K}-mers", cbl.count());
             } else {
                 eprintln!("It contains {} {K}-mers", cbl.count());
+            }
+        }
+
+        Command::Count_occurance(args) => {
+            let index_filename = args.index.as_str();
+            let cbl: CBL<K, T, PREFIX_BITS> = read_index(index_filename);
+            if let Some(top_n) = args.top {
+                let most_common = cbl.most_common_kmers(top_n);
+                eprintln!("Top {top_n} most common k-mers:");
+                for (kmer, count) in most_common {
+                    eprintln!("{kmer}\t{count}");
+                }
             }
         }
         Command::List(args) => {
