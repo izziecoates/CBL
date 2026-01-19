@@ -35,7 +35,7 @@ enum Command {
     /// Count the k-mers contained in an index
     Count(IndexArgs),
     /// List the k-mers contained in an index
-    Count_kmers(CountKmerArgs),
+    CountKmers(CountKmerArgs),
     /// List the k-mers contained in an index
     List(ListArgs),
     /// Query an index for every k-mer contained in a FASTA/Q file
@@ -77,7 +77,7 @@ struct CountKmerArgs {
     index: String,
     /// Show top N most common k-mers
     #[arg(short, long, default_value_t = 10000)]
-    top: Option<usize>,
+    top: Option<u64>,
 }
 
 #[derive(Args, Debug)]
@@ -252,7 +252,6 @@ fn main() {
 
         Command::Count_occurance(args) => {
             let index_filename = args.index.as_str();
-            let cbl: CBL<K, T, PREFIX_BITS> = read_index(index_filename);
             let cbl: CBL<K, T, PREFIX_BITS> = read_index(index_filename);
 
             if let Some(top_n) = args.top {
