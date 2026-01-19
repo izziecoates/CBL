@@ -35,6 +35,8 @@ enum Command {
     /// Count the k-mers contained in an index
     Count(IndexArgs),
     /// List the k-mers contained in an index
+    Count_kmers(CountKmerArgs),
+    /// List the k-mers contained in an index
     List(ListArgs),
     /// Query an index for every k-mer contained in a FASTA/Q file
     Query(QueryArgs),
@@ -67,6 +69,15 @@ struct BuildArgs {
     /// Use canonical k-mers
     #[arg(short, long)]
     canonical: bool,
+}
+
+#[derive(Args, Debug)]
+struct CountKmerArgs {
+    /// Index file (CBL format)
+    index: String,
+    /// Show top N most common k-mers
+    #[arg(short, long), default_value_t = 100000]
+    top: Option<usize>,
 }
 
 #[derive(Args, Debug)]
@@ -149,29 +160,6 @@ fn write_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) {
         .reject_trailing_bytes()
         .serialize_into(&mut writer, &index)
         .unwrap();
-}
-
-fn most_common_kmers<K: Ord + Copy, T: Ord + Copy, const PREFIX_BITS: usize>(cbl: &CBL<K, T, PREFIX_BITS>, n: usize) -> Vec<(K, T)> {
-        let mut entries: Vec<(K, T)> = cbl
-            .iter() // must yield (&K, &T) or (K, T)
-            .map(|(kmer, count)| (*kmer, *count))
-            .collect();
-
-        // Sort by descending count
-        entries.sort_by(|a, b| b.1.cmp(&a.1));
-        entries.truncate(n);
-        entries
-
-        // Example: hard-coded or CLI-provided value
-        let top_n = 10;
-
-        let common = most_common_kmers(&cbl, top_n);
-
-        eprintln!("Top {top_n} most common k-mers:");
-        for (kmer, count) in common {
-            eprintln!("{kmer}\t{count}");
-        }
-    
 }
 
 
@@ -265,14 +253,28 @@ fn main() {
         Command::Count_occurance(args) => {
             let index_filename = args.index.as_str();
             let cbl: CBL<K, T, PREFIX_BITS> = read_index(index_filename);
+            let cbl: CBL<K, T, PREFIX_BITS> = read_index(index_filename);
+
             if let Some(top_n) = args.top {
-                let most_common = cbl.most_common_kmers(top_n);
+                // collect k-mer counts
+                let mut counts: Vec<(K, T)> = cbl
+                    .iter()
+                    .map(|(kmer, count)| (*kmer, *count))
+                    .collect();
+
+                // sort descending by count
+                counts.sort_by(|a, b| b.1.cmp(&a.1));
+
+                // keep only top_n
+                counts.truncate(top_n);
+
                 eprintln!("Top {top_n} most common k-mers:");
-                for (kmer, count) in most_common {
+                for (kmer, count) in counts {
                     eprintln!("{kmer}\t{count}");
                 }
             }
         }
+
         Command::List(args) => {
             let index_filename = args.index.as_str();
             let cbl: CBL<K, T, PREFIX_BITS> = read_index(index_filename);
