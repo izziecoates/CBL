@@ -76,7 +76,7 @@ struct CountKmerArgs {
     /// Index file (CBL format)
     index: String,
     /// Show top N most common k-mers
-    #[arg(short, long), default_value_t = 100000]
+    #[arg(short, long, default_value_t = 10000)]
     top: Option<usize>,
 }
 
