@@ -11,6 +11,7 @@ use std::fs::File;
 use std::io::{stdout, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::path::PathBuf;
+use anyhow::Result;
 
 // Loads runtime-provided constants for which declarations
 // will be generated at `$OUT_DIR/constants.rs`.
@@ -68,6 +69,7 @@ struct BuildArgs {
     canonical: bool,
 }
 
+
 #[derive(Args, Debug)]
 struct IndexArgs {
     /// Index file (CBL format)
@@ -118,6 +120,11 @@ fn read_fasta<P: AsRef<Path>>(path: P) -> Box<dyn FastxReader> {
         .unwrap_or_else(|_| panic!("Failed to open {}", path.as_ref().to_str().unwrap()))
 }
 
+// Add a new reading fasta function that returns a Result of sucessful or failed operation 
+fn read_multi_fasta<P: AsRef<Path>>(path: P) -> Result<Box<dyn FastxReader>> {
+    Ok(parse_fastx_file(&path)?)
+}
+
 fn read_index<D: DeserializeOwned, P: AsRef<Path> + Copy>(path: P) -> D {
     let index = File::open(path)
         .unwrap_or_else(|_| panic!("Failed to open {}", path.as_ref().to_str().unwrap()));
@@ -145,6 +152,7 @@ fn write_index<S: Serialize, P: AsRef<Path> + Copy>(index: &S, path: P) {
         .unwrap();
 }
 
+
 fn main() {
     let args = Cli::parse();
     match args.command {
@@ -156,51 +164,70 @@ fn main() {
                     Output files will be named <input>_index."
                 );
             }
+            let mut index = 0; // incremental index for output files with invalid basenames
 
-            for input_filename in &args.input{
-
+            for input_filename in &args.input {
+                // Create a new CBL index
                 let mut cbl = if args.canonical {
                     CBL::<K, T, PREFIX_BITS>::new_canonical()
                 } else {
                     CBL::<K, T, PREFIX_BITS>::new()
                 };
-                let mut reader = read_fasta(input_filename);
+
+                // Try to open the FASTA file
+                let mut reader = match read_multi_fasta(input_filename) {
+                    Ok(read) => read, // success read_mutli_fasta returns Box<dyn FastxReader>
+                    Err(err) => {
+                        eprintln!("Failed to open {}: due to {}", input_filename, err);
+                        continue; // skip this file, move to the next
+                    }
+                };
+
+
                 eprintln!(
                     "Building the index of {}{K}-mers contained in {}",
                     if cbl.is_canonical() { "canonical " } else { "" },
                     input_filename
                 );
 
-                while let Some(record) = reader.next() {
-                    let seqrec = record.unwrap_or_else(|_| panic!("Invalid record"));
-                    cbl.insert_seq(&seqrec.seq());
+                // Iterate over records
+                while let Some(record_result) = reader.next() {
+                    match record_result {
+                        Ok(seqrec) => cbl.insert_seq(&seqrec.seq()),
+                        Err(err) => {
+                            eprintln!("Skipping invalid record in {}: {}", input_filename, err);
+                            continue; // skip invalid record
+                        }
+                    }
                 }
 
-                let output_filename = if args.input.len() == 1 {
-                    if let Some(ref out) = args.output {
-                        out.clone()
-                    } else {
-                        let base_name = Path::new(input_filename)
-                            .file_stem()
-                            .and_then(|s| s.to_str())
-                            .unwrap_or_else(|| {
-                                panic!("Input basename of '{}' is not valid", input_filename)
-                            });
-                        format!("{base_name}_index")
-                    }
-                } else {
-                    let base_name = Path::new(input_filename)
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or_else(|| {
-                            panic!("Input basename of '{}' is not valid", input_filename)
+                // Build output filename
+                let base_name: String = Path::new(input_filename)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| {
+                        index += 1;
+                        let fall_back_name = format!("unknown_{}", index);
+                        eprintln!(
+                            "Warning: could not determine a valid base name for '{}', using 'input_{}' instead.",
+                            input_filename, index
+                        );
+                        fall_back_name
                         });
+                    
+
+                let output_filename = if args.input.len() == 1 {
+                    args.output.clone().unwrap_or_else(|| format!("{base_name}_index"))
+                } else {
                     format!("{base_name}_index")
                 };
-                
+
                 let output_path = PathBuf::from(&args.output_dir).join(output_filename);
                 write_index(&cbl, output_path.as_path());
+
             }
+
         }
 
         Command::Count(args) => {
@@ -212,6 +239,8 @@ fn main() {
                 eprintln!("It contains {} {K}-mers", cbl.count());
             }
         }
+
+
         Command::List(args) => {
             let index_filename = args.index.as_str();
             let cbl: CBL<K, T, PREFIX_BITS> = read_index(index_filename);
